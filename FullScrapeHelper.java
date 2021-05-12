@@ -1,9 +1,11 @@
 package item_search;
 
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Hashtable;
+import java.util.logging.Handler;
 
 public class FullScrapeHelper {
     private final Hashtable<String, Scraper> websites;
@@ -54,13 +56,36 @@ public class FullScrapeHelper {
         return new Product[0];
     }
     public Product[] searchCertain(String searchString, String[] websitesToSearch){
+        long start = System.currentTimeMillis();
+
         ArrayList<Product> items = new ArrayList<>();
+        ArrayList<Thread> threads = new ArrayList<>();
+        ArrayList<SearchRunnable> runnables = new ArrayList<>();
+        Thread thread;
 
         for (String websiteName: websitesToSearch) {
-            items.addAll(Arrays.asList(search(searchString, websiteName)));
+            SearchRunnable run = new SearchRunnable(searchString, websiteName);
+            thread = new Thread(run);
+            runnables.add(run);
+            threads.add(thread);
+            thread.start();
+        }
+
+        while(threads.size() > 0) {
+            for (int i = 0; i < threads.size(); i++) {
+                if (!threads.get(i).isAlive()) {
+                    items.addAll(Arrays.asList(runnables.get(i).getProducts()));
+                    threads.remove(i);
+                    runnables.remove(i);
+                    break;
+                }
+            }
         }
         Product[] array = items.toArray(new Product[0]);
         Arrays.sort(array, new SortProducts());
+
+        long end = System.currentTimeMillis();
+        System.out.println(end-start);
         return array;
     }
     public void setMaxItemsPerWebsite(int maxItems){
@@ -70,5 +95,30 @@ public class FullScrapeHelper {
     }
     public void setMaxItemsToDefault(){
         setMaxItemsPerWebsite(defaultMaxItems);
+    }
+
+    private class SearchRunnable implements Runnable{
+        private Product[] products;
+        private String searchString;
+        private String websiteName;
+
+        public SearchRunnable(){}
+        public SearchRunnable(String searchString, String websiteName){
+            this.searchString = searchString;
+            this.websiteName = websiteName;
+        }
+
+        @Override
+        public void run() {
+            products = search(searchString, websiteName);
+        }
+
+        public void setSearchString(String searchString){ this.searchString = searchString; }
+        public String getSearchString(){ return searchString; }
+
+        public void setWebsiteName(String websiteName){ this.websiteName = websiteName; }
+        public String getWebsiteName(){ return websiteName; }
+
+        public Product[] getProducts(){return products;}
     }
 }
